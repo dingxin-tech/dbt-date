@@ -39,3 +39,7 @@ from_utc_timestamp(
 {%- macro trino__convert_timezone(column, target_tz, source_tz) -%}
     cast((at_timezone(with_timezone(cast({{ column }} as {{ dbt.type_timestamp() }}), '{{ source_tz }}'), '{{ target_tz }}')) as {{ dbt.type_timestamp() }})
 {%- endmacro -%}
+
+{%- macro maxcompute__convert_timezone(column, target_tz, source_tz=None) -%}
+cast(from_utc_timestamp({{ column }}, '{{ target_tz}}') as {{ dbt.type_timestamp() }})
+{%- endmacro -%}

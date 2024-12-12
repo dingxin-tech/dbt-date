@@ -24,3 +24,10 @@ cast({{ dbt.dateadd('day', -1, dbt.date_trunc('week', dbt.dateadd('day', 1, date
 {%- macro duckdb__week_start(date) -%}
 {{ return(dbt_date.postgres__week_start(date)) }}
 {%- endmacro %}
+
+{%- macro maxcompute__week_start(date) -%}
+case weekday(cast({{date}} as datetime))
+    when 6 then {{date}}
+    else date_sub({{date}}, 1 + weekday(cast({{date}} as datetime)))
+end
+{%- endmacro %}

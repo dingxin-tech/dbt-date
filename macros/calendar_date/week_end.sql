@@ -20,3 +20,11 @@
 {%- macro duckdb__week_end(date) -%}
 {{ return(dbt_date.postgres__week_end(date)) }}
 {%- endmacro %}
+
+{%- macro maxcompute__week_end(date) -%}
+case weekday(cast({{date}} as datetime))
+    when 5 then {{date}}
+    when 6 then date_add({{date}}, 6)
+    else date_add({{date}}, 5 - weekday(cast({{date}} as datetime)))
+end
+{%- endmacro %}

@@ -15,3 +15,7 @@
 {%- macro snowflake__iso_week_end(date) -%}
 {{ dbt_date._iso_week_end(date, 'weekiso') }}
 {%- endmacro %}
+
+{%- macro maxcompute__iso_week_end(date) -%}
+date_add({{date}}, 6 - weekday(cast({{date}} as datetime)))
+{%- endmacro %}

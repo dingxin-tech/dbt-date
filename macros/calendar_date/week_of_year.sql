@@ -20,3 +20,7 @@ cast(ceil(dayofyear({{ date }}) / 7) as int)
 {# {%- macro spark__week_of_year(date) -%}
 weekofyear({{ date }})
 {%- endmacro %} #}
+
+{# {%- macro maxcompute__week_of_year(date) -%}
+cast(ceil(dayofyear({{ date }}) / 7)) as {{ dbt.type_int() }})
+{%- endmacro %} #}

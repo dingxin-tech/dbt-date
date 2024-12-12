@@ -53,3 +53,27 @@
 {%- set f = 'a' if short else 'W' -%}
     date_format({{ date }}, '%{{ f }}')
 {%- endmacro %}
+
+{%- macro maxcompute__day_name(date, short) -%}
+{%- if short -%}
+case dayofweek({{ date }})
+    when 1 then 'Sun'
+    when 2 then 'Mon'
+    when 3 then 'Tue'
+    when 4 then 'Wed'
+    when 5 then 'Thu'
+    when 6 then 'Fri'
+    when 7 then 'Sat'
+end
+{%- else -%}
+case dayofweek({{ date }})
+    when 1 then 'Sunday'
+    when 2 then 'Monday'
+    when 3 then 'Tuesday'
+    when 4 then 'Wednesday'
+    when 5 then 'Thursday'
+    when 6 then 'Friday'
+    when 7 then 'Saturday'
+end
+{%- endif -%}
+{%- endmacro %}

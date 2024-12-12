@@ -5,3 +5,7 @@
 {%- macro redshift__day_of_month(date) -%}
 cast({{ dbt_date.date_part('day', date) }} as {{ dbt.type_bigint() }})
 {%- endmacro %}
+
+{%- macro maxcompute__day_of_month(date) -%}
+dayofmonth({{date}})
+{%- endmacro %}

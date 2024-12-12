@@ -82,3 +82,17 @@
     {% endif -%}
     cast(to_timestamp({{ epochs }}) at time zone 'UTC' as timestamp)
 {%- endmacro %}
+
+
+{%- macro maxcompute__from_unixtimestamp(epochs, format="seconds") -%}
+    {%- if format == "seconds" -%}
+        cast(from_unixtime({{ epochs }}) as {{ dbt.type_timestamp() }})
+    {%- elif format == "milliseconds" -%}
+        cast(from_utc_timestamp({{ epochs }}, 'UTC') as {{ dbt.type_timestamp() }})
+    {%- else -%}
+    {{ exceptions.raise_compiler_error(
+        "value " ~ format ~ " for `format` for from_unixtimestamp is not supported."
+        )
+    }}
+    {% endif -%}
+{%- endmacro %}

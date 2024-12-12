@@ -99,6 +99,11 @@ select
     {{ return([48,49]) }}
 {%- endmacro %}
 
+{% macro maxcompute__get_test_week_of_year() -%}
+    {# weeks_of_year for '2020-11-29' and '2020-12-01', respectively #}
+    {# maxcompute uses ISO year #}
+    {{ return([48,49]) }}
+{%- endmacro %}
 
 {% macro get_test_week_start_date() -%}
     {{ return(adapter.dispatch('get_test_week_start_date', 'dbt_date_integration_tests') ()) }}

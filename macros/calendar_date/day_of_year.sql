@@ -21,3 +21,7 @@
 {%- macro trino__day_of_year(date) -%}
     {{ dbt_date.date_part('day_of_year', date) }}
 {%- endmacro %}
+
+{%- macro maxcompute__day_of_year(date) -%}
+    dayofyear({{ date }})
+{%- endmacro %}

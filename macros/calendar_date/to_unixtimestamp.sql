@@ -21,3 +21,7 @@
 {%- macro trino__to_unixtimestamp(timestamp) -%}
     to_unixtime({{ timestamp }} AT TIME ZONE 'UTC')
 {%- endmacro %}
+
+{%- macro maxcompute__to_unixtimestamp(timestamp) -%}
+    unix_timestamp({{ timestamp }})
+{%- endmacro %}

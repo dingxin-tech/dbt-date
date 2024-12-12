@@ -111,3 +111,16 @@
     {%- endif -%}
 
 {%- endmacro %}
+
+
+{%- macro maxcompute__day_of_week(date, isoweek) -%}
+    {%- if isoweek -%}
+    case
+        -- Shift start of week from Sunday (1) to Monday (2)
+        when dayofweek({{date}}) = 1 then 7
+        else dayofweek({{date}}) - 1
+    end
+    {%- else -%}
+        dayofweek({{date}})
+    {%- endif -%}
+{%- endmacro %}

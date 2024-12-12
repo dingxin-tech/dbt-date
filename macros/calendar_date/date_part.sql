@@ -13,3 +13,19 @@
 {% macro trino__date_part(datepart, date) -%}
     extract({{ datepart }} from {{ date }})
 {%- endmacro %}
+
+{% macro maxcompute__date_part(datepart, date) -%}
+    {% set datepart = datepart.lower() %}
+    {%- if datepart == 'week' -%}
+        weekofyear({{ date }})
+    {%- elif datepart in['year', 'month', 'day', 'hour', 'minute'] -%}
+        extract({{ datepart }} from {{ date }})
+    {%- elif datepart == 'quarter' -%}
+        quarter({{ date }})
+    {%- else -%}
+    {{ exceptions.raise_compiler_error(
+        "value " ~ datepart ~ " for date_part is not supported."
+        )
+    }}
+    {% endif -%}
+{%- endmacro %}
