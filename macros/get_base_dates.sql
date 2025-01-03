@@ -93,9 +93,8 @@ from
 {% macro maxcompute__get_base_dates(start_date, end_date, n_dateparts, datepart) %}
 
 {%- if start_date and end_date -%}
-{%- set start_date="cast(DATE'" ~ start_date ~ "' as " ~ dbt.type_timestamp() ~ ")" -%}
-{%- set end_date="cast(DATE'" ~ end_date ~ "' as " ~ dbt.type_timestamp() ~ ")"  -%}
-
+    {%- set start_date=dbt.type_timestamp() ~ "'" ~ start_date.strftime('%Y-%m-%d %H:%M:%S') ~ "'" -%}
+    {%- set end_date=dbt.type_timestamp() ~ "'" ~ end_date.strftime('%Y-%m-%d %H:%M:%S') ~ "'" -%}
 {%- elif n_dateparts and datepart -%}
 
 {%- set start_date = dbt.dateadd(datepart, -1 * n_dateparts, dbt_date.today()) -%}
