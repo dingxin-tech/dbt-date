@@ -1,4 +1,6 @@
-## Note: This package is no longer actively supported. 
+## Community-maintained fork of the original [dbt-date](https://github.com/calogica/dbt-date) package with extended support for [dbt-maxcompute](https://github.com/aliyun/dbt-maxcompute) (dbt adapter of Alibaba Cloud MaxCompute).
+
+
 
 <p align="center">
 <a href="https://circleci.com/gh/calogica/dbt-date/tree/main">
