@@ -22,6 +22,8 @@
         extract({{ datepart }} from {{ date }})
     {%- elif datepart == 'quarter' -%}
         quarter({{ date }})
+    {%- elif datepart == 'dayofweek' -%}
+        dayofweek({{ date }})
     {%- else -%}
     {{ exceptions.raise_compiler_error(
         "value " ~ datepart ~ " for date_part is not supported."
