@@ -896,6 +896,12 @@ the adapter's `chain` auth, never from the repository). From `integration_tests/
 dbt build -t maxcompute --select tag:maxcompute
 ```
 
+Note on the schema: `MC_TEST_SCHEMA` only fills the profile's default schema (it is still required,
+because that `env_var()` has no default). The relations the models create go to the schema pinned in
+`integration_tests/dbt_project.yml` -- `dbt_date_integration_tests` -- which overrides the profile.
+Measured: a run with `MC_TEST_SCHEMA` set to a different name still created all 16 tagged relations
+under `dbt_date_integration_tests`, and the profile-only schema did not exist server-side.
+
 The `maxcompute` tag marks the MaxCompute-specific contracts: calendar columns compared column by
 column against independently derived values, timezone shifts measured with `datediff()` (so the
 assertion does not depend on which timezone renders a timestamp), and fiscal year/period boundaries
