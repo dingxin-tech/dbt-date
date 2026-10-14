@@ -878,13 +878,20 @@ MaxCompute project rather than read out of documentation.
   `fiscal_year_start_date` from `lag(week_end) over (order by week_end)`; the earliest fiscal year in
   the date dimension it is given has no predecessor, so its start is `NULL` and every date of that
   fiscal year disappears from the result without an error. Build the dimension at least one full
-  fiscal year before the first year you want to see. Related, both fiscal macros assume the
-  "Saturday nearest to the end of `year_end_month`" is unique: if the month ends on a Wednesday the
-  upstream `rank()` ties and duplicates rows, so check your `year_end_month` boundary once.
-  `fiscal_week_of_period` is ranked per `fiscal_period_number` across fiscal years (upstream
-  definition), so a 53-week year in the same table shifts that column for other years too.
-* The fiscal calendar is `week_start_day=1` based on MaxCompute's `dayof_week` numbering, i.e. weeks
-  start on **Sunday** and the "Saturday nearest month end" rule ends them on Saturday.
+  fiscal year before the first year you want to see.
+  The fiscal end itself is always unique: the candidates are the Saturdays of the weeks that *start*
+  on a Sunday inside `year_end_month`, so they sit exactly 7 days apart and a month end can never be
+  equidistant from two of them - an upstream `rank()` tie there is arithmetically impossible
+  (a 2023..2031 sweep across all twelve `year_end_month` values finds none).
+  A 53-week fiscal year does happen, though (`year_end_month=1`: FY2023 = 2023-01-29 .. 2024-02-03).
+  Upstream moves week 53 into the third period of the last quarter, so that period holds 5 weeks;
+  measured on a real project against an independently derived 4-5-4 map, all twelve periods and the
+  53-week count agree. Note that `fiscal_week_of_period` is ranked per `fiscal_period_number` across
+  fiscal years (upstream definition), so a 53-week year sharing the table shifts that column's
+  numbering for the same period number in the other years.
+* The fiscal calendar is `week_start_day=1` based on MaxCompute's `dayofweek()` numbering
+  (Sunday = 1), i.e. weeks start on **Sunday** and the "Saturday nearest month end" rule
+  ends them on Saturday.
 
 ### Running the integration tests on MaxCompute
 
