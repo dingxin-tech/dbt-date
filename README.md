@@ -886,9 +886,13 @@ MaxCompute project rather than read out of documentation.
   A 53-week fiscal year does happen, though (`year_end_month=1`: FY2023 = 2023-01-29 .. 2024-02-03).
   Upstream moves week 53 into the third period of the last quarter, so that period holds 5 weeks;
   measured on a real project against an independently derived 4-5-4 map, all twelve periods and the
-  53-week count agree. Note that `fiscal_week_of_period` is ranked per `fiscal_period_number` across
-  fiscal years (upstream definition), so a 53-week year sharing the table shifts that column's
-  numbering for the same period number in the other years.
+  53-week count agree. `fiscal_week_of_period` is ranked per `fiscal_period_number` **across** fiscal
+  years - the upstream `dense_rank()` carries no fiscal year in its partition, so every year sharing
+  the table is ranked together. Measured on a table holding FY2023 (53 weeks) and FY2024 (52 weeks)
+  at once: all 105 (period, week) rows match the re-derived ranking, and a ranking restricted to each
+  fiscal year gives the same numbers, because each period's week numbers line up year to year. So the
+  missing partition is a latent smell in the upstream definition, not an observed numbering shift -
+  nothing here should be read as either relying on it or promising it stays harmless.
 * The fiscal calendar is `week_start_day=1` based on MaxCompute's `dayofweek()` numbering
   (Sunday = 1), i.e. weeks start on **Sunday** and the "Saturday nearest month end" rule
   ends them on Saturday.
