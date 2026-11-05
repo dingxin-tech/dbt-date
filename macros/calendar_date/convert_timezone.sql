@@ -41,5 +41,18 @@ from_utc_timestamp(
 {%- endmacro -%}
 
 {%- macro maxcompute__convert_timezone(column, target_tz, source_tz=None) -%}
-cast(from_utc_timestamp({{ column }}, '{{ target_tz}}') as {{ dbt.type_timestamp() }})
+{#-
+  source_tz used to be dropped: the emitted SQL only shifted by the target offset,
+  so convert_timezone(col, 'America/Los_Angeles', source_tz='Asia/Shanghai') moved the
+  value by -7h instead of -15h. Measured on the server: from_utc_timestamp adds the
+  target offset, to_utc_timestamp subtracts it, so composing the two yields the
+  target-minus-source shift regardless of the project timezone. With source_tz='UTC'
+  to_utc_timestamp() is the identity, so the default path keeps the previous SQL.
+-#}
+{%- set source_tz = 'UTC' if not source_tz else source_tz -%}
+{%- if source_tz == 'UTC' -%}
+cast(from_utc_timestamp({{ column }}, '{{ target_tz }}') as {{ dbt.type_timestamp() }})
+{%- else -%}
+cast(from_utc_timestamp(to_utc_timestamp({{ column }}, '{{ source_tz }}'), '{{ target_tz }}') as {{ dbt.type_timestamp() }})
+{%- endif -%}
 {%- endmacro -%}

@@ -51,3 +51,18 @@
     order by generated_number
 
 {% endmacro %}
+
+{% macro maxcompute__generate_series(upper_bound) %}
+    {#
+      The default implementation builds 2^n rows by cross joining a 2-row CTE, which
+      MaxCompute rejects: ODPS-0130252 "cartesian product is not allowed without mapjoin".
+      sequence() + lateral view explode() is native and needs no extra session flag.
+    #}
+    {% if upper_bound <= 0 %}
+    {{ exceptions.raise_compiler_error("upper bound must be positive") }}
+    {% endif %}
+
+    select mc_seq.val as generated_number
+    from (select 1 as mc_seed) mc_row
+    lateral view explode(sequence(1, {{ upper_bound }})) mc_seq as val
+{% endmacro %}

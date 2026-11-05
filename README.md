@@ -821,6 +821,105 @@ or, optionally, you can override the default timezone:
 {% set datetime_object = dbt_date.datetime(1997, 9, 29, 6, 14, tz='America/New_York') %}
 ```
 
+## MaxCompute notes & limitations
+
+Everything below is behaviour of the MaxCompute SQL engine (plus one upstream quirk), and it is what
+the `maxcompute__*` macros in this package have to work around. All of it was measured against a real
+MaxCompute project rather than read out of documentation.
+
+* **A `TIMESTAMP` literal needs a time part.** MaxCompute parses `timestamp'...'` only as
+  `yyyy-mm-dd hh:mm:ss`; `timestamp'2026-01-01'` fails with `ODPS-0130161`, and the tempting
+  `cast('2026-01-01' as timestamp)` is worse — the server returns a silent `NULL` instead of an error.
+  `get_base_dates()` normalises its inputs through `dbt_date.maxcompute_timestamp_literal()`:
+  `yyyy-mm-dd` becomes `yyyy-mm-dd 00:00:00`, an ISO `T` separator is replaced by a space, single-digit
+  fields are zero-padded, and a fractional part is kept (`2026-01-01 10:20:30.123` reads back as
+  `.123000`). Anything else raises a compilation error, so a mistyped bound cannot turn into an empty
+  calendar.
+* **A timezone designator in a timestamp literal is not one thing, so the helper refuses it.** Measured
+  on the same project: `'2026-01-01 10:20:30+08:00'` parses but the offset is *ignored* (the wall time is
+  kept), `'2026-01-01 10:20:30Z'` parses and is *converted* (`18:20:30` on a UTC+8 project), while
+  `'...-05:00'` and `'...+08'` are `ODPS-0130161` parse errors — and `cast('2026-01-01T10:20:30' as
+  timestamp)` returns a silent `NULL` even though the same text works as a literal. There is no rendering
+  that preserves the instant, so `maxcompute_timestamp_literal()` refuses a tz-carrying value (and a
+  timezone-aware Python object) and tells the caller to convert to project-local time first.
+  `integration_tests/check_timestamp_literal_guards.sh` asserts each refusal, and
+  `mc_assert_timestamp_literal_forms` asserts that every accepted shape renders to the canonical text
+  *and* is read back by the server as the expected instant.
+* **`TIMESTAMP` is an instant; the project timezone decides how you read it back.**
+  `from_utc_timestamp(x, tz)` adds `tz`'s UTC offset to the value and `to_utc_timestamp(x, tz)`
+  subtracts it. `convert_timezone(col, target_tz, source_tz)` therefore converts a column that stores
+  source-zone wall clock into target-zone wall clock, and the shift is exactly
+  `offset(target) - offset(source)` no matter what the project timezone is. Reading an absolute point
+  in time as a *string* (`now('Asia/Shanghai')`, `today()`) is only unambiguous when the value is
+  rendered in UTC; keep `dbt_date:time_zone` and the project timezone aligned if you compare the
+  rendered text, otherwise compare the value (e.g. `datediff(...)`), not the string.
+* **Daylight-saving edges resolve silently.** A local time inside the spring-forward gap
+  (`2026-03-08 02:30` in `America/Los_Angeles`) is read with the pre-transition offset, and an
+  ambiguous fall-back time (`2026-11-01 01:30`) resolves to the first occurrence. Converting a wall
+  clock across a gap and back shifts it by an hour instead of returning the input, so don't round-trip
+  wall clocks through `convert_timezone()` over a transition.
+* **There is only one week numbering.** `weekofyear()` is ISO-8601 (Monday first, week 1 contains
+  4 January), so `week_of_year()` and `iso_week_of_year()` return the same number here, and
+  `week_of_year('2027-01-01')` is 53 because that date belongs to ISO year 2026. `week_start_date()` /
+  `week_end_date()` keep the Sunday/Saturday convention of the other adapters, while
+  `iso_week_start_date()` / `iso_week_end_date()` are Monday/Sunday.
+* **`date_part()` accepts a subset**: `year`, `month`, `day`, `hour`, `minute`, `week` (ISO),
+  `quarter`, `dayofweek`. Anything else raises a compilation error, because MaxCompute has no
+  `date_trunc` (the adapter uses `datetrunc()`), `extract(...)` covers fewer fields, and `weekday()`
+  only accepts `DATETIME` (the calendar macros cast internally).
+* **Impossible calendar dates are coerced, not rejected.** `date'2026-02-29'` and
+  `cast('2026-02-29' as date)` in a non-leap year both come back as `2026-03-01`, while
+  `to_date('2026-02-29', 'yyyy-mm-dd')` raises `ODPS-0121145`. Validate your own bounds.
+* **No cartesian products.** The generic `generate_series()` reaches 2^n rows by cross joining a
+  2-row set to itself, which MaxCompute rejects with `ODPS-0130252`; a native implementation on
+  `explode(sequence(...))` is provided, and `maxcompute__date_spine()` emits a single flat `SELECT`
+  so it can still be embedded inside a CTE.
+* **Fiscal macros need a complete preceding fiscal year.** `get_fiscal_year_dates()` derives
+  `fiscal_year_start_date` from `lag(week_end) over (order by week_end)`; the earliest fiscal year in
+  the date dimension it is given has no predecessor, so its start is `NULL` and every date of that
+  fiscal year disappears from the result without an error. Build the dimension at least one full
+  fiscal year before the first year you want to see.
+  The fiscal end itself is always unique: the candidates are the Saturdays of the weeks that *start*
+  on a Sunday inside `year_end_month`, so they sit exactly 7 days apart and a month end can never be
+  equidistant from two of them - an upstream `rank()` tie there is arithmetically impossible
+  (a 2023..2031 sweep across all twelve `year_end_month` values finds none).
+  A 53-week fiscal year does happen, though (`year_end_month=1`: FY2023 = 2023-01-29 .. 2024-02-03).
+  Upstream moves week 53 into the third period of the last quarter, so that period holds 5 weeks;
+  measured on a real project against an independently derived 4-5-4 map, all twelve periods and the
+  53-week count agree. `fiscal_week_of_period` is ranked per `fiscal_period_number` **across** fiscal
+  years - the upstream `dense_rank()` carries no fiscal year in its partition, so every year sharing
+  the table is ranked together. Measured on a table holding FY2023 (53 weeks) and FY2024 (52 weeks)
+  at once: all 105 (period, week) rows match the re-derived ranking, and a ranking restricted to each
+  fiscal year gives the same numbers, because each period's week numbers line up year to year. So the
+  missing partition is a latent smell in the upstream definition, not an observed numbering shift -
+  nothing here should be read as either relying on it or promising it stays harmless.
+* The fiscal calendar is `week_start_day=1` based on MaxCompute's `dayofweek()` numbering
+  (Sunday = 1), i.e. weeks start on **Sunday** and the "Saturday nearest month end" rule
+  ends them on Saturday.
+
+### Running the integration tests on MaxCompute
+
+`integration_tests/ci/profiles.yml` has a `maxcompute` target that reads the connection from
+environment variables (`MC_TEST_PROJECT`, `MC_TEST_SCHEMA`, `ODPS_ENDPOINT`; credentials are taken by
+the adapter's `chain` auth, never from the repository). From `integration_tests/`:
+
+```sh
+dbt build -t maxcompute --select tag:maxcompute
+```
+
+Note on the schema: `MC_TEST_SCHEMA` only fills the profile's default schema (it is still required,
+because that `env_var()` has no default). The relations the models create go to the schema pinned in
+`integration_tests/dbt_project.yml` -- `dbt_date_integration_tests` -- which overrides the profile.
+Measured: a run with `MC_TEST_SCHEMA` set to a different name still created all 16 tagged relations
+under `dbt_date_integration_tests`, and the profile-only schema did not exist server-side.
+
+The `maxcompute` tag marks the MaxCompute-specific contracts: calendar columns compared column by
+column against independently derived values, timezone shifts measured with `datediff()` (so the
+assertion does not depend on which timezone renders a timestamp), and fiscal year/period boundaries
+re-derived from the "Saturday nearest month end" rule. Their expectation tables sit next to them in
+`integration_tests/models/maxcompute/` (`mc_expected_*`), so a reviewer can check any single value by
+hand without re-running anything.
+
 ## Integration Tests (Developers Only)
 
 This project contains integration tests for all test macros in a separate `integration_tests` dbt project contained in this repo.

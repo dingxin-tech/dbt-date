@@ -44,6 +44,14 @@ integration_tests:
       connect_timeout: 60
       retry_all: true
 
+    maxcompute:
+      type: maxcompute
+      project: "{{ env_var('MC_TEST_PROJECT') }}"
+      schema: "{{ env_var('MC_TEST_SCHEMA') }}"
+      endpoint: "{{ env_var('ODPS_ENDPOINT') }}"
+      auth_type: chain
+      threads: 4
+
     trino:
       type: trino
       method: none
