@@ -4,11 +4,11 @@ with agg as (
     select count(*) as n, min(date_week) as mn, max(date_week) as mx
     from {{ ref('mc_base_dates_week') }}
 )
-select 'rows' as failed_check, cast(n as string) as actual, '4' as expected
-from agg where n <> 4
+select 'rows' as failed_check, cast(n as string) as actual, '3' as expected
+from agg where n <> 3
 union all
 select 'first_period', cast(mn as string), '2025-12-22 00:00:00'
 from agg where mn <> timestamp'2025-12-22 00:00:00'
 union all
-select 'last_period', cast(mx as string), '2026-01-12 00:00:00'
-from agg where mx <> timestamp'2026-01-12 00:00:00'
+select 'last_period', cast(mx as string), '2026-01-05 00:00:00'
+from agg where mx <> timestamp'2026-01-05 00:00:00'

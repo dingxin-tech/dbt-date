@@ -79,13 +79,21 @@ select * from filtered
 {% macro maxcompute__date_spine(datepart, start_date, end_date) %}
 {#
   Two MaxCompute-specific departures from the default implementation:
-    1. the row source: default__date_spine calls generate_series(), whose cross-join
-       body MaxCompute rejects (ODPS-0130252); see maxcompute__generate_series.
+    1. the row source: default__date_spine builds it with generate_series(), whose
+       cross-join body MaxCompute rejects (ODPS-0130252); maxcompute__generate_series
+       keeps that row count and its "upper bound must be positive" guard, using the
+       native sequence() + lateral view explode().
     2. the shape: the default emits a WITH block, and get_base_dates already wraps this
        macro inside `with date_spine as ( ... )`, so a nested WITH/lateral view would sit
        inside a CTE. This version stays a single flat SELECT so it can be embedded anywhere.
-  sequence(0, intervals) yields intervals + 1 offsets, so the period at end_date itself is
-  kept by the `datediff(...) <= 0` filter (closed interval, same as the other adapters).
+
+  The span itself is deliberately NOT redefined here: generate_series(intervals) yields
+  `intervals` rows and `generated_number - 1` turns them into offsets 0..intervals-1, exactly
+  like the default's `row_number() - 1`. So the end date is excluded -- 2026-01-01..2026-03-01
+  daily is 59 rows ending 2026-02-28, and get_base_dates(n_dateparts=1) ends today rather than
+  emitting tomorrow(). The datediff filter is kept only as a guard for datepart rounding; it
+  must not be load-bearing, and an inclusive endpoint would be a behaviour change to propose
+  separately rather than to fold into this compatibility fix.
 #}
 select * from (
 
@@ -93,13 +101,17 @@ select * from (
         {{
             dbt.dateadd(
                 datepart,
-                'mc_seq.val',
+                'mc_offsets.offset_n',
                 start_date
             )
         }}
     ) as date_{{datepart}}
-    from (select 1 as mc_seed) mc_row
-    lateral view explode(sequence(0, {{ dbt_date.get_intervals_between(start_date, end_date, datepart) }})) mc_seq as val
+    from (
+        select generated_number - 1 as offset_n
+        from (
+            {{ dbt_date.generate_series(dbt_date.get_intervals_between(start_date, end_date, datepart)) }}
+        ) mc_series
+    ) mc_offsets
 
 ) mc_periods
 where datediff(date_{{datepart}}, {{ end_date }}) <= 0
